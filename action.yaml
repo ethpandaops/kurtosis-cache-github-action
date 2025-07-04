@@ -16,6 +16,27 @@ inputs:
     description: 'Prefix for the cache'
     required: false
     default: 'kurtosis-docker'
+  s3_access_key:
+    description: 'S3 access key'
+    required: false
+  s3_secret_key:
+    description: 'S3 secret key'
+    required: false
+  s3_bucket:
+    description: 'S3 bucket'
+    required: false
+  s3_endpoint:
+    description: 'S3 endpoint'
+    required: false
+    default: 's3.amazonaws.com'
+  s3_insecure:
+    description: 'S3 secure'
+    required: false
+    default: 'false'
+  s3_path:
+    description: 'S3 path'
+    required: false
+    default: ''
 
 outputs:
   kurtosis_version:
@@ -52,11 +73,36 @@ runs:
         echo "cachedir=$cachedir" >> $GITHUB_OUTPUT
 
     - name: Load docker images cache.
-      id: cache
+      id: local_cache
       uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # 4.2.3
+      if: ${{ inputs.s3_access_key == '' }}
       with:
         path: ${{ steps.cachedir.outputs.cachedir }}
         key: ${{ inputs.cache_prefix }}-${{ runner.os }}-${{ steps.kurtosis_version.outputs.version }}
+      
+    - name: Load docker images cache from S3.
+      id: s3_cache
+      uses: tespkg/actions-cache@a2e3f005921809689270625bc026d387f73017ae # 1.9.0
+      if: ${{ inputs.s3_access_key != '' }}
+      with:
+        path: ${{ steps.cachedir.outputs.cachedir }}
+        key: ${{ inputs.s3_path }}${{ inputs.cache_prefix }}-${{ runner.os }}-${{ steps.kurtosis_version.outputs.version }}
+        restore-keys: ${{ inputs.cache_prefix }}-${{ runner.os }}-${{ steps.kurtosis_version.outputs.version }}
+        accessKey: ${{ inputs.s3_access_key }}
+        secretKey: ${{ inputs.s3_secret_key }}
+        bucket: ${{ inputs.s3_bucket }}
+        endpoint: ${{ inputs.s3_endpoint }}
+        insecure: ${{ inputs.s3_insecure }}
+
+    - name: Get cache hit.
+      id: cache
+      shell: bash
+      run: |
+        if [ "${{ inputs.s3_access_key }}" != "" ]; then
+          echo "cache-hit=${{ steps.s3_cache.outputs.cache-hit }}" >> $GITHUB_OUTPUT
+        else
+          echo "cache-hit=${{ steps.local_cache.outputs.cache-hit }}" >> $GITHUB_OUTPUT
+        fi
 
     - name: "Restore docker cache"
       if: ${{ steps.cache.outputs.cache-hit == 'true' }}
