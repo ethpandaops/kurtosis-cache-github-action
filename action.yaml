@@ -12,10 +12,6 @@ inputs:
     description: 'Warmup cache with dummy testnet'
     required: false
     default: 'true'
-  create_cache:
-    description: 'Create docker image cache as post action'
-    required: false
-    default: 'false'
   cache_prefix:
     description: 'Prefix for the cache'
     required: false
@@ -25,6 +21,12 @@ outputs:
   kurtosis_version:
     description: "Kurtosis version"
     value: ${{ steps.kurtosis_version.outputs.version }}
+  cache_hit:
+    description: "Cache hit"
+    value: ${{ steps.cache.outputs.cache-hit }}
+  cachedir:
+    description: "Cachedir"
+    value: ${{ steps.cachedir.outputs.cachedir }}
   
 runs:
   using: 'composite'
@@ -100,16 +102,3 @@ runs:
         
         docker_images=$(docker image list --format '{{ if ne .Repository "<none>" }}{{ .Repository }}{{ if ne .Tag "<none>" }}:{{ .Tag }}{{ end }}{{ else }}{{ .ID }}{{ end }}' | tr '\n' ' ')
         docker save --output $cachedir/docker-images.tar $docker_images
-
-    - name: Save docker images to cache
-      if: ${{ always() && inputs.create_cache == 'true' && steps.cache.outputs.cache-hit == '' }}
-      uses: gacts/run-and-post-run@v1
-      with:
-        post: |
-          cachedir="${{ steps.cachedir.outputs.cachedir }}"
-          if [ ! -d $cachedir ]; then
-            mkdir -p $cachedir
-          fi
-          
-          docker_images=$(docker image list --format '{{ if ne .Repository "<none>" }}{{ .Repository }}{{ if ne .Tag "<none>" }}:{{ .Tag }}{{ end }}{{ else }}{{ .ID }}{{ end }}' | tr '\n' ' ')
-          docker save --output $cachedir/docker-images.tar $docker_images
