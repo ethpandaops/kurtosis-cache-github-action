@@ -1,0 +1,114 @@
+name: 'Kurtosis Cache GitHub Action'
+description: 'Caches docker images for kurtosis'
+branding:
+  icon: 'box'
+  color: 'green'
+inputs:
+  kurtosis_version:
+    description: 'Specific version of Kurtosis to use'
+    required: false
+    default: 'latest'
+  warmup_cache:
+    description: 'Warmup cache with dummy testnet'
+    required: false
+    default: 'true'
+  create_cache:
+    description: 'Create docker image cache as post action'
+    required: false
+    default: 'false'
+  cache_prefix:
+    description: 'Prefix for the cache'
+    required: false
+    default: 'kurtosis-docker'
+
+outputs:
+  kurtosis_version:
+    description: "Kurtosis version"
+    value: ${{ steps.kurtosis_version.outputs.version }}
+  
+runs:
+  using: 'composite'
+  steps:
+    - name: Get kurtosis version
+      id: kurtosis_version
+      shell: bash
+      run: |
+        kurtosis_version="${{ inputs.kurtosis_version }}"
+        if [ "$kurtosis_version" = "latest" ]; then
+          # get latest kurtosis version
+          echo "deb [trusted=yes] https://apt.fury.io/kurtosis-tech/ /" | sudo tee /etc/apt/sources.list.d/kurtosis.list
+          sudo apt-get update -o Dir::Etc::sourcelist="sources.list.d/kurtosis.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
+          kurtosis_version=$(apt show kurtosis-cli | grep Version | awk '{print $2}')
+        fi
+        echo "kurtosis_version=$kurtosis_version" >> $GITHUB_OUTPUT
+    - name: Create directory for docker cache
+      id: cachedir
+      shell: bash
+      run: |
+        cachedir="${{ runner.temp }}/kurtosis-cache-${{ steps.kurtosis_version.outputs.version }}"
+        mkdir -p $cachedir
+        echo "cachedir=$cachedir" >> $GITHUB_OUTPUT
+
+    - name: Load docker images cache.
+      id: cache
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # 4.2.3
+      with:
+        path: ${{ steps.cachedir.outputs.cachedir }}
+        key: ${{ inputs.cache_prefix }}-${{ runner.os }}-${{ steps.kurtosis_version.outputs.version }}
+
+    - name: "Restore docker cache"
+      if: ${{ steps.cache.outputs.cache-hit == 'true' }}
+      shell: bash
+      run: |
+        echo "Restoring docker cache..."
+        docker load -i ${{ steps.cachedir.outputs.cachedir }}/docker-images.tar
+    
+    - name: "Generate dummy kurtosis config"
+      if: ${{ inputs.warmup_cache == 'true' && steps.cache.outputs.cache-hit == '' }}
+      id: warmup
+      shell: bash
+      run: |
+        tempdir="${{ runner.temp }}/kurtosis-warmup-${{ steps.kurtosis_version.outputs.version }}"
+        mkdir -p $tempdir
+        echo "{\"participants\": []}" > $tempdir/test-network.yaml
+
+    - name: Run kurtosis testnet for cache warmup
+      if: ${{ inputs.warmup_cache == 'true' && steps.cache.outputs.cache-hit == '' }}
+      continue-on-error: true
+      id: testnet
+      uses: ethpandaops/kurtosis-assertoor-github-action@5932604b244dbd2ddb811516b516a9094f4d2c2f # v1
+      with:
+        kurtosis_extra_args: "--image-download always --non-blocking-tasks --verbosity DETAILED"
+        kurtosis_backend: docker
+        kurtosis_version: ${{ steps.kurtosis_version.outputs.version }}
+        ethereum_package_url: github.com/pk910/kurtosis-dummy-pkg
+        ethereum_package_branch: main
+        ethereum_package_args: ${{ steps.warmup.outputs.tempdir }}/test-network.yaml
+        enclave_name: "assertoor-warmup"
+        await_assertoor_tests: "false"
+        enclave_dump: "false"
+
+    - name: "Cache docker images"
+      if: ${{ inputs.warmup_cache == 'true' && steps.cache.outputs.cache-hit == '' }}
+      shell: bash
+      run: |
+        cachedir="${{ steps.cachedir.outputs.cachedir }}"
+        if [ ! -d $cachedir ]; then
+          mkdir -p $cachedir
+        fi
+        
+        docker_images=$(docker image list --format '{{ if ne .Repository "<none>" }}{{ .Repository }}{{ if ne .Tag "<none>" }}:{{ .Tag }}{{ end }}{{ else }}{{ .ID }}{{ end }}' | tr '\n' ' ')
+        docker save --output $cachedir/docker-images.tar $docker_images
+
+    - name: Save docker images to cache
+      if: ${{ always() && inputs.create_cache == 'true' && steps.cache.outputs.cache-hit == '' }}
+      uses: gacts/run-and-post-run@v1
+      with:
+        post: |
+          cachedir="${{ steps.cachedir.outputs.cachedir }}"
+          if [ ! -d $cachedir ]; then
+            mkdir -p $cachedir
+          fi
+          
+          docker_images=$(docker image list --format '{{ if ne .Repository "<none>" }}{{ .Repository }}{{ if ne .Tag "<none>" }}:{{ .Tag }}{{ end }}{{ else }}{{ .ID }}{{ end }}' | tr '\n' ' ')
+          docker save --output $cachedir/docker-images.tar $docker_images
