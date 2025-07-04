@@ -40,7 +40,7 @@ runs:
           sudo apt-get update -o Dir::Etc::sourcelist="sources.list.d/kurtosis.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
           kurtosis_version=$(apt show kurtosis-cli | grep Version | awk '{print $2}')
         fi
-        echo "kurtosis_version=$kurtosis_version" >> $GITHUB_OUTPUT
+        echo "version=$kurtosis_version" >> $GITHUB_OUTPUT
     - name: Create directory for docker cache
       id: cachedir
       shell: bash
@@ -71,6 +71,7 @@ runs:
         tempdir="${{ runner.temp }}/kurtosis-warmup-${{ steps.kurtosis_version.outputs.version }}"
         mkdir -p $tempdir
         echo "{\"participants\": []}" > $tempdir/test-network.yaml
+        echo "tempdir=$tempdir" >> $GITHUB_OUTPUT
 
     - name: Run kurtosis testnet for cache warmup
       if: ${{ inputs.warmup_cache == 'true' && steps.cache.outputs.cache-hit == '' }}
