@@ -12,6 +12,10 @@ inputs:
     description: 'Warmup cache with dummy testnet'
     required: false
     default: 'true'
+  warmup_only:
+    description: 'Warmup cache only, do not restore existing cache'
+    required: false
+    default: 'false'
   cache_prefix:
     description: 'Prefix for the cache'
     required: false
@@ -79,6 +83,7 @@ runs:
       with:
         path: ${{ steps.cachedir.outputs.cachedir }}
         key: ${{ inputs.cache_prefix }}-${{ runner.os }}-${{ steps.kurtosis_version.outputs.version }}
+        lookup-only: ${{ inputs.warmup_only == 'true' }}
       
     - name: Load docker images cache from S3.
       id: s3_cache
@@ -93,6 +98,7 @@ runs:
         bucket: ${{ inputs.s3_bucket }}
         endpoint: ${{ inputs.s3_endpoint }}
         insecure: ${{ inputs.s3_insecure }}
+        lookup-only: ${{ inputs.warmup_only == 'true' }}
 
     - name: Get cache hit.
       id: cache
@@ -105,7 +111,7 @@ runs:
         fi
 
     - name: "Restore docker cache"
-      if: ${{ steps.cache.outputs.cache-hit == 'true' }}
+      if: ${{ steps.cache.outputs.cache-hit == 'true' && inputs.warmup_only == 'false' }}
       shell: bash
       run: |
         echo "Restoring docker cache..."
