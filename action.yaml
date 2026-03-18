@@ -63,7 +63,7 @@ runs:
         kurtosis_version="${{ inputs.kurtosis_version }}"
         if [ "$kurtosis_version" = "latest" ]; then
           # get latest kurtosis version
-          echo "deb [trusted=yes] https://apt.fury.io/kurtosis-tech/ /" | sudo tee /etc/apt/sources.list.d/kurtosis.list
+          echo "deb [trusted=yes] https://sdk.kurtosis.com/kurtosis-cli-release-artifacts/ /" | sudo tee /etc/apt/sources.list.d/kurtosis.list
           sudo apt-get update -o Dir::Etc::sourcelist="sources.list.d/kurtosis.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
           kurtosis_version=$(apt show kurtosis-cli | grep Version | awk '{print $2}')
         fi
