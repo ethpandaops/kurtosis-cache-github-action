@@ -78,7 +78,7 @@ runs:
 
     - name: Load docker images cache.
       id: local_cache
-      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # 4.2.3
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       if: ${{ inputs.s3_access_key == '' }}
       with:
         path: ${{ steps.cachedir.outputs.cachedir }}
@@ -87,7 +87,7 @@ runs:
       
     - name: Load docker images cache from S3.
       id: s3_cache
-      uses: tespkg/actions-cache@a2e3f005921809689270625bc026d387f73017ae # 1.9.0
+      uses: tespkg/actions-cache@570a8ae32f67c95bcaca3f8cc88702cd318291e9 # v1.10.0
       if: ${{ inputs.s3_access_key != '' }}
       with:
         path: ${{ steps.cachedir.outputs.cachedir }}
